@@ -1,5 +1,6 @@
 # AgentFocus
 
+[![CI](https://github.com/Mike-Animal-Counseling/agentFocus/actions/workflows/ci.yml/badge.svg)](https://github.com/Mike-Animal-Counseling/agentFocus/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Mike-Animal-Counseling/agentFocus)](https://github.com/Mike-Animal-Counseling/agentFocus/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
