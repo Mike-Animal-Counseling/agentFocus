@@ -1,0 +1,23 @@
+# Compiled binaries — distributed via GitHub Releases, not committed.
+/AgentFocus.exe
+/AgentFocus-debug.exe
+*.exe
+
+# Development-only probes, protocol dumps, and ad-hoc test scripts.
+/_probe/
+
+# Go build / test artifacts.
+*.test
+*.out
+/dist/
+
+# OS / editor cruft.
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Note: rsrc_windows_amd64.syso (icon + manifest resource) and winres/ ARE
+# committed — they are needed for `go build` to embed the icon and the
+# comctl32-v6 manifest the approval dialog depends on.
