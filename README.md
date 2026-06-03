@@ -1,5 +1,10 @@
 # AgentFocus
 
+[![Release](https://img.shields.io/github/v/release/Mike-Animal-Counseling/agentFocus)](https://github.com/Mike-Animal-Counseling/agentFocus/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white)](https://github.com/Mike-Animal-Counseling/agentFocus)
+
 **Relax while Codex works — without losing control.**
 
 AgentFocus is a lightweight Windows tray app that reacts to [OpenAI Codex](https://developers.openai.com/codex)'s activity. When you send Codex a prompt, it opens a "relax" browser window so you can take a break; when Codex needs your approval to run a command, it shows a topmost dialog so you decide **Allow / Deny / Skip** without hunting for the terminal; when Codex finishes, it counts down and brings your IDE back to the foreground.
