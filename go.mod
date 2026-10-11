@@ -4,7 +4,7 @@ go 1.27.2
 
 require (
 	github.com/getlantern/systray v1.2.2
-	golang.org/x/sys v0.45.0
+	golang.org/x/sys v0.49.0
 )
 
 require (
