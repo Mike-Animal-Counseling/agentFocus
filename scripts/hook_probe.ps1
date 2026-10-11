@@ -28,16 +28,26 @@ try {
 
 if (-not $bytes -or $bytes.Length -eq 0) { exit 0 }
 
+if ($bytes.Length -gt 65536) { exit 0 }
+try {
+    $hookTokenPath = Join-Path $env:APPDATA 'AgentFocus/auth/hook.token'
+    $hookToken = [System.IO.File]::ReadAllText($hookTokenPath).Trim()
+    if ($hookToken -notmatch '^[a-f0-9]{64}$') { exit 0 }
+    $hookHeaders = @{ Authorization = 'Bearer ' + $hookToken }
+} catch { exit 0 }
+
 $text = [System.Text.Encoding]::UTF8.GetString($bytes)
 
 if ($text -match '"hook_event_name"\s*:\s*"PermissionRequest"') {
     # Synchronous: ask AgentFocus, block for the user's decision.
     try {
         $resp = Invoke-WebRequest `
-            -Uri 'http://localhost:27182/approval' `
+            -Uri 'http://127.0.0.1:27182/approval' `
             -Method Post `
+            -Headers $hookHeaders `
             -ContentType 'application/json; charset=utf-8' `
             -Body $bytes `
+            -TimeoutSec 600 `
             -UseBasicParsing
         $decision = (ConvertFrom-Json $resp.Content).decision
     } catch {
@@ -57,8 +67,9 @@ if ($text -match '"hook_event_name"\s*:\s*"PermissionRequest"') {
 # Non-PermissionRequest: fire-and-forget to /hook.
 try {
     Invoke-WebRequest `
-        -Uri 'http://localhost:27182/hook' `
+        -Uri 'http://127.0.0.1:27182/hook' `
         -Method Post `
+            -Headers $hookHeaders `
         -ContentType 'application/json; charset=utf-8' `
         -Body $bytes `
         -TimeoutSec 2 `
