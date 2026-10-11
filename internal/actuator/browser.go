@@ -1,6 +1,8 @@
 package actuator
 
 import (
+	"errors"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -89,6 +91,12 @@ func (b *BrowserActuator) Do(a event.Action) error {
 func (b *BrowserActuator) openRelax() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	for _, raw := range b.urls {
+		parsed, err := url.Parse(raw)
+		if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" || parsed.User != nil {
+			return errors.New("relax URLs must use HTTP(S)")
+		}
+	}
 
 	// Reuse: if the relax window is still open, just bring it to the foreground.
 	if b.relaxProc != nil && !b.relaxDead {
@@ -139,21 +147,12 @@ func (b *BrowserActuator) openRelax() error {
 // openViaDefault opens each URL with the OS default browser via `cmd /c start`.
 // Used only when chrome.exe is not found; reuse tracking is unavailable here.
 func (b *BrowserActuator) openViaDefault() error {
-	var firstErr error
-	for _, url := range b.urls {
-		cmd := exec.Command("cmd", "/c", "start", url)
-		hideChildWindow(cmd)
-		if err := cmd.Start(); err != nil {
-			logf("[actuator:browser] failed to open %s: %v", url, err)
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
+	for _, raw := range b.urls {
+		if err := openDefaultBrowser(raw); err != nil {
+			return err
 		}
-		logf("[actuator:browser] opened %s via default browser", url)
-		go func(c *exec.Cmd) { _ = c.Wait() }(cmd)
 	}
-	return firstErr
+	return nil
 }
 
 // closeRelax closes the dedicated relax window if we launched one. The engine no

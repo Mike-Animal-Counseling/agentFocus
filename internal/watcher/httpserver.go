@@ -2,14 +2,16 @@ package watcher
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
+	"strings"
 	"time"
 
 	"agentfocus/internal/event"
@@ -29,6 +31,8 @@ type Approver interface {
 //   - /approval for PermissionRequest, which blocks until the user decides and
 //     returns the decision so the hook script can hand it back to Codex.
 type httpSource struct {
+	token    string
+	active   chan struct{}
 	addr     string
 	out      chan event.Event
 	server   *http.Server
@@ -54,11 +58,25 @@ func (h *httpSource) Events() <-chan event.Event { return h.out }
 func (h *httpSource) Start(ctx context.Context) {
 	ctx, h.cancel = context.WithCancel(ctx)
 	h.ctx = ctx
+	token := make([]byte, 32)
+	if _, err := rand.Read(token); err != nil {
+		close(h.out)
+		close(h.done)
+		return
+	}
+	h.token = hex.EncodeToString(token)
+	if err := writeHookToken(h.token); err != nil {
+		log.Print("[watcher] cannot create private hook authentication file")
+		close(h.out)
+		close(h.done)
+		return
+	}
+	h.active = make(chan struct{}, 16)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/hook", h.handleHook)
 	mux.HandleFunc("/approval", h.handleApproval)
-	h.server = &http.Server{Addr: h.addr, Handler: mux}
+	h.server = &http.Server{Addr: h.addr, Handler: h.protect(mux), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Minute, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
 
 	go h.serve(ctx)
 }
@@ -90,7 +108,7 @@ func (h *httpSource) handleHook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 	if err != nil {
 		http.Error(w, "read error", http.StatusBadRequest)
 		return
@@ -98,7 +116,6 @@ func (h *httpSource) handleHook(w http.ResponseWriter, r *http.Request) {
 
 	// Append every received POST to a debug log so we can confirm hooks fire
 	// and inspect their payloads. Best-effort; never blocks the response.
-	logReceivedHook(body)
 
 	// Always 200 the hook quickly: the hook script must not fail or block
 	// Codex regardless of whether we recognized the payload.
@@ -136,18 +153,21 @@ func (h *httpSource) handleApproval(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 	if err != nil {
 		http.Error(w, "read error", http.StatusBadRequest)
 		return
 	}
-	logReceivedHook(body)
 
 	command := ""
 	if p, ok := parseHookPayloadRaw(body); ok {
 		command = p.ToolInput.Command
 	}
 
+	if command == "" || len(command) > 8192 {
+		http.Error(w, "Invalid command", http.StatusBadRequest)
+		return
+	}
 	decision := "skip"
 	if h.approver != nil {
 		decision = h.approver.Approve(command)
@@ -175,31 +195,34 @@ func parseHookPayloadRaw(data []byte) (hookPayload, bool) {
 	return p, true
 }
 
-// logReceivedHook appends a timestamped record of a raw hook POST body to
-// %APPDATA%\AgentFocus\hook_received.log. Best-effort: any error is logged and
-// ignored so request handling is never affected.
-func logReceivedHook(body []byte) {
-	dir := os.Getenv("APPDATA")
-	if dir == "" {
-		var err error
-		if dir, err = os.UserConfigDir(); err != nil {
+// protect permits only authenticated non-browser clients and bounds concurrency.
+func (h *httpSource) protect(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		host := r.Host
+		if host != h.addr && host != strings.Replace(h.addr, "127.0.0.1", "localhost", 1) || r.Header.Get("Origin") != "" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-	}
-	logPath := filepath.Join(dir, "AgentFocus", "hook_received.log")
-	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
-		log.Printf("[watcher] hook log mkdir failed: %v", err)
-		return
-	}
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		log.Printf("[watcher] hook log open failed: %v", err)
-		return
-	}
-	defer f.Close()
-
-	stamp := time.Now().Format("2006-01-02 15:04:05.000")
-	fmt.Fprintf(f, "==== %s ====\n%s\n", stamp, body)
+		if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+			http.Error(w, "JSON required", http.StatusUnsupportedMediaType)
+			return
+		}
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if len(h.token) != 64 || subtle.ConstantTimeCompare([]byte(token), []byte(h.token)) != 1 {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		select {
+		case h.active <- struct{}{}:
+			defer func() { <-h.active }()
+		default:
+			http.Error(w, "Busy", http.StatusTooManyRequests)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // --- Codex hook protocol knowledge is confined below this line --------------

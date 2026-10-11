@@ -135,3 +135,7 @@ See [FUTURE_TODO.md](FUTURE_TODO.md) for planned features and ideas.
 ## License
 
 MIT (see LICENSE).
+
+## Security and deployment
+
+Read the [security policy](SECURITY.md) and [production requirements](docs/PRODUCTION_SECURITY.md) before deployment.
