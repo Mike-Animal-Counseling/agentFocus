@@ -21,3 +21,13 @@ Thumbs.db
 # Note: rsrc_windows_amd64.syso (icon + manifest resource) and winres/ ARE
 # committed — they are needed for `go build` to embed the icon and the
 # comctl32-v6 manifest the approval dialog depends on.
+
+# secrets — never commit real credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+credentials.json
