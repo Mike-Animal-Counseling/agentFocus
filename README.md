@@ -12,7 +12,7 @@ AgentFocus is a lightweight Windows tray app that reacts to [OpenAI Codex](https
 
 It hooks into Codex via Codex's own **hooks** mechanism (configured in `~/.codex/config.toml`), so it works alongside the Codex CLI and the VSCode extension without changing your workflow.
 
----
+[Download](https://github.com/Mike-Animal-Counseling/agentFocus/releases/latest) · [Install](#install) · [Usage](#usage) · [Configuration](#configuration)
 
 ## How it works
 
@@ -48,7 +48,7 @@ The relax browser runs in a dedicated Chrome profile (`%LOCALAPPDATA%\AgentFocus
 ## Install
 
 ### Option A — download a release
-1. Grab `AgentFocus.exe` from the [Releases](../../releases) page.
+1. Grab `AgentFocus.exe` from the [Releases](https://github.com/Mike-Animal-Counseling/agentFocus/releases/latest) page.
 2. Clone or download this repo (you need `scripts/hook_probe.ps1` and `scripts/install.ps1`).
 3. Run the installer (configures the Codex hooks):
    ```powershell
